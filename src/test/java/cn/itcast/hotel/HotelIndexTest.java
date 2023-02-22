@@ -1,5 +1,6 @@
 package cn.itcast.hotel;
 
+import cn.itcast.hotel.constants.HotelIndexConstants;
 import org.apache.http.HttpHost;
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest;
 import org.elasticsearch.client.RequestOptions;
@@ -12,7 +13,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
-
 import javax.xml.bind.annotation.XmlTransient;
 import java.io.IOException;
 
@@ -26,7 +26,14 @@ class HotelIndexTest {
     //创建索引和映射
     @Test
     void testCreateIndex() throws IOException {
+        //1.
+        CreateIndexRequest hotel = new CreateIndexRequest("hotel");
 
+        //2.
+        hotel.source(MAPPING_TEMPLATE,XContentType.JSON);
+
+        //3.
+        client.indices().create(hotel,RequestOptions.DEFAULT);
     }
 
     @Test
@@ -41,15 +48,19 @@ class HotelIndexTest {
     }
 
 
+
     @BeforeEach
     void setUp() {
-
+        client = new RestHighLevelClient(RestClient.builder(
+                HttpHost.create("http://192.168.211.128:9200")
+        ));
     }
 
     @AfterEach
     void tearDown() throws IOException {
-
+        client.close();
     }
+
 
 
 
