@@ -50,4 +50,8 @@ public class HotelIndexConstants {
             "    }\n" +
             "  }\n" +
             "}";
+
+    public static void main(String[] args) {
+        System.out.println(HotelIndexConstants.MAPPING_TEMPLATE);
+    }
 }
