@@ -98,6 +98,7 @@ class HotelDocumentTest {
         ////更新字段
         map.put("price", 550);
         map.put("score", 49);
+        updateRequest.doc(map);
         /*updateRequest.doc(
             "price", 500,
             "score", 50);*/
