@@ -44,44 +44,34 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
     {
         //1. 创建searchRequest对象, 指定索引名称
         SearchRequest searchRequest = new SearchRequest("hotel");
-        //2. 根据搜索框构建查询条件
-        BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
-        //if (requestParams.getKey()!=null)
-        if (StringUtils.isNotEmpty(requestParams.getKey())) {
-            //2.1当搜索框内有内容时,根据输入的内容进行查询
-            BoolQueryBuilder queryBuilder = boolQuery.must(QueryBuilders.matchQuery("all", requestParams.getKey()));
-        } else {
-            //2.2当搜索框内无内容时，默认搜索全部酒店
-            boolQuery.must(QueryBuilders.matchAllQuery());
-        }
-        //3.根据所选的条件对酒店结果进行过滤
-        filterUtilSet(requestParams, boolQuery);
+        //2. 根据搜索框构建查询条件,并根据所选的条件对酒店结果进行过滤
+        BoolQueryBuilder boolQuery =filterUtilSet(requestParams);
 
-        //4.对搜寻到的数据按距离进行排序
+        //3.对搜寻到的数据按距离进行排序
         sortDistanceSet(requestParams, searchRequest);
 
-        //5.对结果进行分页显示
+        //4.对结果进行分页显示
         pageSet(requestParams, searchRequest);
 
-        //6.获取所定义的条件搜索请求
+        //5.获取所定义的条件搜索请求
         searchRequest.source().query(boolQuery);
 
-        //7. 根据请求执行查询
+        //6. 根据请求执行查询
         SearchResponse searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
 
-        //8.定义对象，用于返回结果
+        //7.定义对象，用于返回结果
         PageResult pageResult = new PageResult();
 
-        //9.根据条件获取结果数据
+        //8.根据条件获取结果数据
         SearchHits hits = searchResponse.getHits();
 
-        //10.获取到符合的酒店个数并设置到对象中
+        //9.获取到符合的酒店个数并设置到对象中
         pageTotalSet(pageResult, hits);
 
-        //11对每个符合条件的个数进行遍历
+        //10对每个符合条件的个数进行遍历
         parseResponse(pageResult, hits);
 
-        //12.返回结果
+        //11.返回结果
         return pageResult;
     }
 
@@ -178,11 +168,18 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
 
     /**
      * 根据所选的内容进行条件过滤
-     * @param requestParams
-     * @param boolQuery
      */
-    private void filterUtilSet(RequestParams requestParams, BoolQueryBuilder boolQuery)
+    private BoolQueryBuilder filterUtilSet(RequestParams requestParams)
     {
+        BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
+        //if (requestParams.getKey()!=null)
+        if (StringUtils.isNotEmpty(requestParams.getKey())) {
+            //2.1当搜索框内有内容时,根据输入的内容进行查询
+            boolQuery.must(QueryBuilders.matchQuery("all", requestParams.getKey()));
+        } else {
+            //2.2当搜索框内无内容时，默认搜索全部酒店
+            boolQuery.must(QueryBuilders.matchAllQuery());
+        }
         //品牌
         if (StringUtils.isNotEmpty(requestParams.getBrand())) {
             boolQuery.filter(QueryBuilders.matchQuery("all", requestParams.getBrand()));
@@ -204,5 +201,6 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
         if (requestParams.getMaxPrice() != null) {
             boolQuery.filter(QueryBuilders.rangeQuery("price").lte(requestParams.getMaxPrice()));
         }
+        return boolQuery;
     }
 }
