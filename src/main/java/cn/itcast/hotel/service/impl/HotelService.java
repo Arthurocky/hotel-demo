@@ -37,27 +37,152 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
     private RestHighLevelClient client;
 
     /**
-     * 进行查询
-     *
-     * @param requestParams
-     * @return
+     * 查询操作
      */
     @Override
     public PageResult search(RequestParams requestParams) throws IOException
     {
         //1. 创建searchRequest对象, 指定索引名称
         SearchRequest searchRequest = new SearchRequest("hotel");
-        //2. 构建查询条件
+        //2. 根据搜索框构建查询条件
         BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
         //if (requestParams.getKey()!=null)
         if (StringUtils.isNotEmpty(requestParams.getKey())) {
-            //当搜索框内有内容时
+            //2.1当搜索框内有内容时,根据输入的内容进行查询
             BoolQueryBuilder queryBuilder = boolQuery.must(QueryBuilders.matchQuery("all", requestParams.getKey()));
         } else {
-            //当搜索框内无内容时，搜索全部酒店
+            //2.2当搜索框内无内容时，默认搜索全部酒店
             boolQuery.must(QueryBuilders.matchAllQuery());
         }
-        //对酒店结果进行过滤
+        //3.根据所选的条件对酒店结果进行过滤
+        filterUtilSet(requestParams, boolQuery);
+
+        //4.对搜寻到的数据按距离进行排序
+        sortDistanceSet(requestParams, searchRequest);
+
+        //5.对结果进行分页显示
+        pageSet(requestParams, searchRequest);
+
+        //6.获取所定义的条件搜索请求
+        searchRequest.source().query(boolQuery);
+
+        //7. 根据请求执行查询
+        SearchResponse searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
+
+        //8.定义对象，用于返回结果
+        PageResult pageResult = new PageResult();
+
+        //9.根据条件获取结果数据
+        SearchHits hits = searchResponse.getHits();
+
+        //10.获取到符合的酒店个数并设置到对象中
+        pageTotalSet(pageResult, hits);
+
+        //11对每个符合条件的个数进行遍历
+        parseResponse(pageResult, hits);
+
+        //12.返回结果
+        return pageResult;
+    }
+
+    /**
+     * 遍历搜索结果并转化为hotelDoc，存入到pageResult
+     * @param pageResult
+     * @param hits
+     */
+    private void parseResponse(PageResult pageResult, SearchHits hits)
+    {
+        for (SearchHit hit : hits.getHits()) {
+            //8.1获取到单个数据(json格式)
+            String json = hit.getSourceAsString();
+            //8.2将json格式转化为HotelDoc形式
+            HotelDoc hotelDoc = JSON.parseObject(json, HotelDoc.class);
+            //8.3解析高亮操作
+            highLightSet(hit, hotelDoc);
+            //8.4解析距离
+            distanceSet(hit, hotelDoc);
+            //8.5将获取的单个HotelDoc对象存入pageResult内
+            //System.out.println(hotelDoc);
+            pageResult.getHotels().add(hotelDoc);
+        }
+    }
+
+    /**
+     * 获取总页数并存入到pageResult
+     * @param pageResult
+     * @param hits
+     */
+    private void pageTotalSet(PageResult pageResult, SearchHits hits)
+    {
+        long total = hits.getTotalHits().value;
+        pageResult.setTotal(total);
+    }
+
+    /**
+     * 距离设置-对单个对象设置距离
+     * @param hit
+     * @param hotelDoc
+     */
+    private void distanceSet(SearchHit hit, HotelDoc hotelDoc)
+    {
+        Object[] sortValues = hit.getSortValues();
+        if (null != sortValues && sortValues.length > 0){
+            hotelDoc.setDistance(sortValues[0]);
+        }
+    }
+
+    /**
+     * 高亮设置-判断是否有高亮对象，如果存在则设置高亮
+     * @param hit
+     * @param hotelDoc
+     */
+    private void highLightSet(SearchHit hit, HotelDoc hotelDoc)
+    {
+        if (null != hit.getHighlightFields()) {
+            HighlightField fieldName = hit.getHighlightFields().get("name");
+            //存在高亮名称时
+            if (null != fieldName) {
+                Text[] fragments = fieldName.getFragments();
+                String highName = Arrays.stream(fragments).map(Text::string).collect(Collectors.joining(","));
+                hotelDoc.setName(highName);
+            }
+        }
+    }
+
+    /**
+     * 设置显示的页数
+     * @param requestParams
+     * @param searchRequest
+     */
+    private void pageSet(RequestParams requestParams, SearchRequest searchRequest)
+    {
+        Integer page = requestParams.getPage();
+        Integer size = requestParams.getSize();
+        searchRequest.source().from((page - 1) * size).size(size);
+    }
+
+    /**
+     * 距离设置-对获取的距离按递增进行排序
+     * @param requestParams
+     * @param searchRequest
+     */
+    private void sortDistanceSet(RequestParams requestParams, SearchRequest searchRequest)
+    {
+        if (StringUtils.isNotEmpty(requestParams.getLocation())) {
+            //GeoDistanceSortBuilder location = SortBuilders.geoDistanceSort("location", new GeoPoint(requestParams.getLocation()));
+            //GeoDistanceSortBuilder sortLocation = location.order(SortOrder.ASC).unit(DistanceUnit.KILOMETERS);
+            GeoDistanceSortBuilder sortBuilder = SortBuilders.geoDistanceSort("location", requestParams.getLocation()).unit(DistanceUnit.KILOMETERS).order(SortOrder.ASC);
+            searchRequest.source().sort(sortBuilder);
+        }
+    }
+
+    /**
+     * 根据所选的内容进行条件过滤
+     * @param requestParams
+     * @param boolQuery
+     */
+    private void filterUtilSet(RequestParams requestParams, BoolQueryBuilder boolQuery)
+    {
         //品牌
         if (StringUtils.isNotEmpty(requestParams.getBrand())) {
             boolQuery.filter(QueryBuilders.matchQuery("all", requestParams.getBrand()));
@@ -79,55 +204,5 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
         if (requestParams.getMaxPrice() != null) {
             boolQuery.filter(QueryBuilders.rangeQuery("price").lte(requestParams.getMaxPrice()));
         }
-        //对搜寻到的数据按距离进行排序
-        if (StringUtils.isNotEmpty(requestParams.getLocation())) {
-            //GeoDistanceSortBuilder location = SortBuilders.geoDistanceSort("location", new GeoPoint(requestParams.getLocation()));
-            //GeoDistanceSortBuilder sortLocation = location.order(SortOrder.ASC).unit(DistanceUnit.KILOMETERS);
-            GeoDistanceSortBuilder sortBuilder = SortBuilders.geoDistanceSort("location", requestParams.getLocation()).unit(DistanceUnit.KILOMETERS).order(SortOrder.ASC);
-            searchRequest.source().sort(sortBuilder);
-        }
-        //分页显示
-        Integer page = requestParams.getPage();
-        Integer size = requestParams.getSize();
-        searchRequest.source().from((page - 1) * size).size(size);
-
-        //3.获取条件搜索请求
-        searchRequest.source().query(boolQuery);
-
-        //4. 根据请求执行查询
-        SearchResponse searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
-
-        //5.定义对象，用于返回
-        PageResult pageResult = new PageResult();
-
-        //6.根据条件获取结果数据
-        SearchHits hits = searchResponse.getHits();
-
-        //7.获取到符合
-        long total = hits.getTotalHits().value;
-
-        pageResult.setTotal(total);
-
-        for (SearchHit hit : hits.getHits()) {
-            String json = hit.getSourceAsString();
-            HotelDoc hotelDoc = JSON.parseObject(json, HotelDoc.class);
-            //解析高亮
-            if (null != hit.getHighlightFields()) {
-                HighlightField fieldName = hit.getHighlightFields().get("name");
-                if (null != fieldName) {
-                    Text[] fragments = fieldName.getFragments();
-                    String highName = Arrays.stream(fragments).map(Text::string).collect(Collectors.joining(","));
-                    hotelDoc.setName(highName);
-                }
-            }
-            //解析距离
-            Object[] sortValues = hit.getSortValues();
-            if (null != sortValues && sortValues.length > 0){
-                hotelDoc.setDistance(sortValues[0]);
-            }
-            //System.out.println(hotelDoc);
-            pageResult.getHotels().add(hotelDoc);
-        }
-        return pageResult;
     }
 }
