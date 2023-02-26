@@ -20,15 +20,22 @@ import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
+import org.elasticsearch.search.fetch.subphase.highlight.HighlightBuilder;
 import org.elasticsearch.search.fetch.subphase.highlight.HighlightField;
 import org.elasticsearch.search.sort.GeoDistanceSortBuilder;
 import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortOrder;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 
 import javax.annotation.Resource;
+import java.beans.PropertyDescriptor;
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -51,13 +58,17 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
         SearchRequest searchRequest = new SearchRequest("hotel");
 
         //2. 根据搜索框构建查询条件,并根据所选的条件对酒店结果进行过滤
-        BoolQueryBuilder boolQuery =filterUtilSet(requestParams);
+        BoolQueryBuilder boolQuery = filterUtilSet(requestParams);
 
         //3.获取所定义的条件搜索请求
         searchRequest.source().query(boolQuery);
 
+        //添加高亮
+        addHighLight(searchRequest);
+
         //4.对搜寻到的数据按距离进行排序
         sortDistanceSet(requestParams, searchRequest);
+
 
         //5.对结果进行分页显示
         pageSet(requestParams, searchRequest);
@@ -86,15 +97,23 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
         return pageResult;
     }
 
+    private void addHighLight(SearchRequest searchRequest)
+    {
+        HighlightBuilder highlightBuilder = new HighlightBuilder().field("name").requireFieldMatch(false);
+        searchRequest.source().highlighter(highlightBuilder);
+    }
+
+
     /**
      * 遍历搜索结果并转化为hotelDoc，存入到pageResult
+     *
      * @param pageResult
      */
     private void parseResponse(PageResult pageResult, SearchHits searchHits)
     {
         SearchHit[] hits = searchHits.getHits();
 
-        for (SearchHit hit :hits) {
+        for (SearchHit hit : hits) {
             //8.1获取到单个数据(json格式)
             String json = hit.getSourceAsString();
             //8.2将json格式转化为HotelDoc形式
@@ -112,6 +131,7 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
 
     /**
      * 获取总页数并存入到pageResult
+     *
      * @param pageResult
      * @param hits
      */
@@ -123,37 +143,60 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
 
     /**
      * 解析距离-对单个对象设置显示距离
+     *
      * @param hit
      * @param hotelDoc
      */
     private void distanceSet(SearchHit hit, HotelDoc hotelDoc)
     {
         Object[] sortValues = hit.getSortValues();
-        if (null != sortValues && sortValues.length > 0){
+        if (null != sortValues && sortValues.length > 0) {
             hotelDoc.setDistance(sortValues[0]);
         }
     }
 
     /**
      * 高亮设置-判断是否有高亮对象，如果存在则设置高亮
+     *
      * @param hit
      * @param hotelDoc
      */
     private void highLightSet(SearchHit hit, HotelDoc hotelDoc)
     {
-        if (null != hit.getHighlightFields()) {
-            HighlightField fieldName = hit.getHighlightFields().get("name");
-            //存在高亮名称时
-            if (null != fieldName) {
-                Text[] fragments = fieldName.getFragments();
-                String highName = Arrays.stream(fragments).map(Text::string).collect(Collectors.joining(","));
-                hotelDoc.setName(highName);
+
+        //如果存在高亮，则进行下列操作
+        Map<String, HighlightField> highlightFieldMap = hit.getHighlightFields();
+        //if(null !=highlightFieldMap && highlightFieldMap.size()>0)
+        if(!CollectionUtils.isEmpty(highlightFieldMap)) {
+            for (String key : highlightFieldMap.keySet()) {
+                //key-->HotelDoc的属性名
+                HighlightField field = highlightFieldMap.get(key);
+                //存在高亮名称时
+                if (null != field) {
+                    Text[] fragments = field.getFragments();
+                    String highName = Arrays.stream(fragments).map(Text::string).collect(Collectors.joining(","));
+                    //获取到属性
+                    PropertyDescriptor propertyDescriptor = BeanUtils.getPropertyDescriptor(hotelDoc.getClass(), key);
+                    //propertyDescriptor.getReadMethod();//getName
+                    //propertyDescriptor.getWriteMethod();//setName
+                    //获取到要高亮的属性方法
+                    Method setMethod = propertyDescriptor.getWriteMethod();
+                    try {
+                        //调用方法，将高亮设置到存在的属性上
+                        setMethod.invoke(hotelDoc, highName);
+                    } catch (IllegalAccessException e) {
+                        //e.printStackTrace();
+                    } catch (InvocationTargetException e) {
+                        //e.printStackTrace();
+                    }
+                }
             }
         }
     }
 
     /**
      * 设置显示的页数
+     *
      * @param requestParams
      * @param searchRequest
      */
@@ -166,6 +209,7 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
 
     /**
      * 距离设置-对获取的距离按递增进行排序
+     *
      * @param requestParams
      * @param searchRequest
      */
@@ -184,7 +228,7 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
     {
         BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
         //if (requestParams.getKey()!=null)
-        if(StringUtils.isNotEmpty(params.getKey())) {
+        if (StringUtils.isNotEmpty(params.getKey())) {
             //2.1当搜索框内有内容时,根据输入的内容进行查询
             boolQuery.must(QueryBuilders.matchQuery("all", params.getKey()));
         } else {
@@ -205,11 +249,11 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
             boolQuery.filter(QueryBuilders.termQuery("starName", params.getStarName()));
         }
         //最小价格
-        if(params.getMinPrice() != null){
+        if (params.getMinPrice() != null) {
             boolQuery.filter(QueryBuilders.rangeQuery("price").gte(params.getMinPrice()));
         }
         //最大价格
-        if(params.getMaxPrice() != null){
+        if (params.getMaxPrice() != null) {
             boolQuery.filter(QueryBuilders.rangeQuery("price").lte(params.getMaxPrice()));
         }
         return boolQuery;
