@@ -11,7 +11,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
+import java.io.IOException;
 
+/**
+ * @author Arthurocky
+ */
 @Slf4j
 @RequestMapping("/hotel")
 @RestController
@@ -26,10 +30,10 @@ public class HotelController {
      * 请求方法: POST
      */
     @PostMapping("/list")
-    public PageResult getList(@RequestBody RequestParams requestParams)
+    public PageResult getList(@RequestBody RequestParams requestParams) throws IOException
     {
         PageResult pageResult = hotelService.search(requestParams);
-        return requestParams;
+        return pageResult;
     }
 
 }

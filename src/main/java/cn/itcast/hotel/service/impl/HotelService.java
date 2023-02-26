@@ -43,36 +43,43 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
      * 查询操作
      */
     @Override
-    public PageResult search(RequestParams requestParams) throws IOException
+    public PageResult search(RequestParams requestParams)
     {
         //1. 创建searchRequest对象, 指定索引名称
+
         SearchRequest searchRequest = new SearchRequest("hotel");
+
         //2. 根据搜索框构建查询条件,并根据所选的条件对酒店结果进行过滤
         BoolQueryBuilder boolQuery =filterUtilSet(requestParams);
 
-        //3.对搜寻到的数据按距离进行排序
-        sortDistanceSet(requestParams, searchRequest);
-
-        //4.对结果进行分页显示
-        pageSet(requestParams, searchRequest);
-
-        //5.获取所定义的条件搜索请求
+        //3.获取所定义的条件搜索请求
         searchRequest.source().query(boolQuery);
 
+        //4.对搜寻到的数据按距离进行排序
+        sortDistanceSet(requestParams, searchRequest);
+
+        //5.对结果进行分页显示
+        pageSet(requestParams, searchRequest);
+
         //6. 根据请求执行查询
-        SearchResponse searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
+        SearchResponse searchResponse = null;
+        try {
+            searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
         //7.定义对象，用于返回结果
         PageResult pageResult = new PageResult();
 
         //8.根据条件获取结果数据
-        SearchHits hits = searchResponse.getHits();
+        SearchHits searchHits = searchResponse.getHits();
 
         //9.获取到符合的酒店个数并设置到对象中
-        pageTotalSet(pageResult, hits);
+        pageTotalSet(pageResult, searchHits);
 
         //10对每个符合条件的个数进行遍历
-        parseResponse(pageResult, hits);
+        parseResponse(pageResult, searchHits);
 
         //11.返回结果
         return pageResult;
@@ -81,11 +88,12 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
     /**
      * 遍历搜索结果并转化为hotelDoc，存入到pageResult
      * @param pageResult
-     * @param hits
      */
-    private void parseResponse(PageResult pageResult, SearchHits hits)
+    private void parseResponse(PageResult pageResult, SearchHits searchHits)
     {
-        for (SearchHit hit : hits.getHits()) {
+        SearchHit[] hits = searchHits.getHits();
+
+        for (SearchHit hit :hits) {
             //8.1获取到单个数据(json格式)
             String json = hit.getSourceAsString();
             //8.2将json格式转化为HotelDoc形式
@@ -97,6 +105,7 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
             //8.5将获取的单个HotelDoc对象存入pageResult内
             //System.out.println(hotelDoc);
             pageResult.getHotels().add(hotelDoc);
+
         }
     }
 
@@ -172,37 +181,37 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
     /**
      * 根据所选的内容进行条件过滤
      */
-    private BoolQueryBuilder filterUtilSet(RequestParams requestParams)
+    private BoolQueryBuilder filterUtilSet(RequestParams params)
     {
         BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
         //if (requestParams.getKey()!=null)
-        if (StringUtils.isNotEmpty(requestParams.getKey())) {
+        if(StringUtils.isNotEmpty(params.getKey())) {
             //2.1当搜索框内有内容时,根据输入的内容进行查询
-            boolQuery.must(QueryBuilders.matchQuery("all", requestParams.getKey()));
+            boolQuery.must(QueryBuilders.matchQuery("all", params.getKey()));
         } else {
             //2.2当搜索框内无内容时，默认搜索全部酒店
             boolQuery.must(QueryBuilders.matchAllQuery());
         }
         //品牌
-        if (StringUtils.isNotEmpty(requestParams.getBrand())) {
-            boolQuery.filter(QueryBuilders.matchQuery("all", requestParams.getBrand()));
+        if (StringUtils.isNotEmpty(params.getBrand())) {
+            boolQuery.filter(QueryBuilders.termQuery("brand", params.getBrand()));
         }
         //城市
-        if (StringUtils.isNotEmpty(requestParams.getCity())) {
-            boolQuery.filter(QueryBuilders.matchQuery("all", requestParams.getCity()));
+        if (StringUtils.isNotEmpty(params.getCity())) {
+            boolQuery.filter(QueryBuilders.termQuery("city", params.getCity()));
         }
         //
         //星级
-        if (StringUtils.isNotEmpty(requestParams.getStarName())) {
-            boolQuery.filter(QueryBuilders.termQuery("starName", requestParams.getStarName()));
+        if (StringUtils.isNotEmpty(params.getStarName())) {
+            boolQuery.filter(QueryBuilders.termQuery("starName", params.getStarName()));
         }
         //最小价格
-        if (requestParams.getMinPrice() != null) {
-            boolQuery.filter(QueryBuilders.rangeQuery("price").gte(requestParams.getMinPrice()));
+        if(params.getMinPrice() != null){
+            boolQuery.filter(QueryBuilders.rangeQuery("price").gte(params.getMinPrice()));
         }
         //最大价格
-        if (requestParams.getMaxPrice() != null) {
-            boolQuery.filter(QueryBuilders.rangeQuery("price").lte(requestParams.getMaxPrice()));
+        if(params.getMaxPrice() != null){
+            boolQuery.filter(QueryBuilders.rangeQuery("price").lte(params.getMaxPrice()));
         }
         return boolQuery;
     }
