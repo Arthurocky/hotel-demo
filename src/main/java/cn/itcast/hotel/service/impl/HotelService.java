@@ -18,6 +18,8 @@ import org.elasticsearch.common.text.Text;
 import org.elasticsearch.common.unit.DistanceUnit;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
+import org.elasticsearch.index.query.functionscore.FunctionScoreQueryBuilder;
+import org.elasticsearch.index.query.functionscore.ScoreFunctionBuilders;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
 import org.elasticsearch.search.fetch.subphase.highlight.HighlightBuilder;
@@ -62,6 +64,34 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
 
         //3.获取所定义的条件搜索请求
         searchRequest.source().query(boolQuery);
+
+        //添加算分函数
+/*        FunctionScoreQueryBuilder.FilterFunctionBuilder[] functionBuilders = {
+                new FunctionScoreQueryBuilder.FilterFunctionBuilder(
+                        QueryBuilders.termQuery("isAD", true),
+                        ScoreFunctionBuilders.weightFactorFunction(10)
+                )
+        };
+        FunctionScoreQueryBuilder functionScoreQuery = QueryBuilders.functionScoreQuery(boolQuery, functionBuilders);
+        searchRequest.source().query(functionScoreQuery);*/
+
+        //算分
+        // 2.算分控制
+        FunctionScoreQueryBuilder functionScoreQuery =
+                QueryBuilders.functionScoreQuery(
+                        // 原始查询，相关性算分的查询
+                        boolQuery,
+                        // function score的数组
+                        new FunctionScoreQueryBuilder.FilterFunctionBuilder[]{
+                                // 其中的一个function score 元素
+                                new FunctionScoreQueryBuilder.FilterFunctionBuilder(
+                                        // 过滤条件
+                                        QueryBuilders.termQuery("isAD", true),
+                                        // 算分函数
+                                        ScoreFunctionBuilders.weightFactorFunction(10)
+                                )
+                        });
+        searchRequest.source().query(functionScoreQuery);
 
         //添加高亮
         addHighLight(searchRequest);
