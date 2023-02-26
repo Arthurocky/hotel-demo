@@ -21,7 +21,7 @@ public class HotelDoc {
     /**
      * 排序时的 距离值
      */
-    private Object distance;
+    private Object  distance;
 
     public HotelDoc(Hotel hotel) {
         this.id = hotel.getId();

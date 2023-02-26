@@ -13,6 +13,7 @@ import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestHighLevelClient;
+import org.elasticsearch.common.geo.GeoPoint;
 import org.elasticsearch.common.text.Text;
 import org.elasticsearch.common.unit.DistanceUnit;
 import org.elasticsearch.index.query.BoolQueryBuilder;
@@ -121,7 +122,7 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
     }
 
     /**
-     * 距离设置-对单个对象设置距离
+     * 解析距离-对单个对象设置显示距离
      * @param hit
      * @param hotelDoc
      */
@@ -171,9 +172,7 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
     private void sortDistanceSet(RequestParams requestParams, SearchRequest searchRequest)
     {
         if (StringUtils.isNotEmpty(requestParams.getLocation())) {
-            //GeoDistanceSortBuilder location = SortBuilders.geoDistanceSort("location", new GeoPoint(requestParams.getLocation()));
-            //GeoDistanceSortBuilder sortLocation = location.order(SortOrder.ASC).unit(DistanceUnit.KILOMETERS);
-            GeoDistanceSortBuilder sortBuilder = SortBuilders.geoDistanceSort("location", requestParams.getLocation()).unit(DistanceUnit.KILOMETERS).order(SortOrder.ASC);
+            GeoDistanceSortBuilder sortBuilder = SortBuilders.geoDistanceSort("location", new GeoPoint(requestParams.getLocation())).order(SortOrder.ASC).unit(DistanceUnit.KILOMETERS);
             searchRequest.source().sort(sortBuilder);
         }
     }
