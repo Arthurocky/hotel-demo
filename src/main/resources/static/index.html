@@ -485,6 +485,8 @@
         this.loading = true;
         this.geolocation.getCurrentPosition((status,result) => {
           this.loading = false;
+          status = "complete";
+          result.position={lng:113.930174,lat:22.648043};
           if(status === 'complete'){
             console.log("successs")
             // https://a.amap.com/jsapi/static/image/plugin/point.png
