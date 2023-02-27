@@ -22,6 +22,10 @@ import org.elasticsearch.index.query.functionscore.FunctionScoreQueryBuilder;
 import org.elasticsearch.index.query.functionscore.ScoreFunctionBuilders;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
+import org.elasticsearch.search.aggregations.AggregationBuilders;
+import org.elasticsearch.search.aggregations.Aggregations;
+import org.elasticsearch.search.aggregations.bucket.terms.Terms;
+import org.elasticsearch.search.aggregations.bucket.terms.TermsAggregationBuilder;
 import org.elasticsearch.search.fetch.subphase.highlight.HighlightBuilder;
 import org.elasticsearch.search.fetch.subphase.highlight.HighlightField;
 import org.elasticsearch.search.sort.GeoDistanceSortBuilder;
@@ -36,8 +40,7 @@ import java.beans.PropertyDescriptor;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.Arrays;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -127,6 +130,49 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
         return pageResult;
     }
 
+
+    /**
+     * 对品牌过滤
+     */
+    @Override
+    public Map<String, List<String>> getFilter(RequestParams requestParams)
+    {
+
+        //1.创建返回对象
+        Map<String, List<String>> map = new HashMap<>();
+
+        //2.创建SearchRequest
+        SearchRequest request = new SearchRequest("hotel");
+
+        //3.使用聚合前，需进行条件过滤
+        request.source().query(filterUtilSet(requestParams));
+
+        //4.做聚合, 按品牌聚合
+        TermsAggregationBuilder agg = AggregationBuilders.terms("brandAgg").field("brand").size(10);
+        request.source().aggregation(agg);
+
+        //5.进行查询
+        SearchResponse search = null;
+        try {
+            search = client.search(request, RequestOptions.DEFAULT);
+            //6.解析结果
+            Aggregations aggregations = search.getAggregations();
+            Terms brandAgg = aggregations.get("brandAgg");
+            List<? extends Terms.Bucket> buckets = brandAgg.getBuckets();
+            //7.将结果注入到返回对象中
+            List<String> list = new ArrayList<>();
+            for (Terms.Bucket bucket : buckets) {
+                list.add(bucket.getKeyAsString());
+                System.out.println(bucket.getKey());
+            }
+            map.put("brand", list);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        //8。返回结果
+        return map;
+    }
+
     private void addHighLight(SearchRequest searchRequest)
     {
         HighlightBuilder highlightBuilder = new HighlightBuilder().field("name").requireFieldMatch(false);
@@ -197,7 +243,7 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
         //如果存在高亮，则进行下列操作
         Map<String, HighlightField> highlightFieldMap = hit.getHighlightFields();
         //if(null !=highlightFieldMap && highlightFieldMap.size()>0)
-        if(!CollectionUtils.isEmpty(highlightFieldMap)) {
+        if (!CollectionUtils.isEmpty(highlightFieldMap)) {
             for (String key : highlightFieldMap.keySet()) {
                 //key-->HotelDoc的属性名
                 HighlightField field = highlightFieldMap.get(key);

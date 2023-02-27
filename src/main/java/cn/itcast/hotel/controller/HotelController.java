@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
 import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 
 /**
  * @author Arthurocky
@@ -34,6 +36,14 @@ public class HotelController {
     {
         PageResult pageResult = hotelService.search(requestParams);
         return pageResult;
+    }
+
+    @PostMapping("/filters")
+    public Map<String, List<String>> filters(@RequestBody RequestParams requestParams)
+    {
+        Map<String, List<String>> resultFilter = hotelService.getFilter(requestParams);
+        return resultFilter;
+
     }
 
 }
