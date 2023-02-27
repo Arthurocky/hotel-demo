@@ -25,7 +25,6 @@ import org.elasticsearch.search.SearchHits;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
 import org.elasticsearch.search.aggregations.Aggregations;
 import org.elasticsearch.search.aggregations.bucket.terms.Terms;
-import org.elasticsearch.search.aggregations.bucket.terms.TermsAggregationBuilder;
 import org.elasticsearch.search.fetch.subphase.highlight.HighlightBuilder;
 import org.elasticsearch.search.fetch.subphase.highlight.HighlightField;
 import org.elasticsearch.search.sort.GeoDistanceSortBuilder;
@@ -137,7 +136,6 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
     @Override
     public Map<String, List<String>> getFilter(RequestParams requestParams)
     {
-
         //1.创建返回对象
         Map<String, List<String>> map = new HashMap<>();
 
@@ -147,9 +145,13 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
         //3.使用聚合前，需进行条件过滤
         request.source().query(filterUtilSet(requestParams));
 
-        //4.做聚合, 按品牌聚合
-        TermsAggregationBuilder agg = AggregationBuilders.terms("brandAgg").field("brand").size(10);
-        request.source().aggregation(agg);
+        //4.对城市、星级、品牌作聚合
+        request.source().aggregation(AggregationBuilders
+                .terms("cityAgg").field("city").size(100));
+        request.source().aggregation(AggregationBuilders
+                .terms("starNameAgg").field("starName").size(100));
+        request.source().aggregation(AggregationBuilders
+                .terms("brandAgg").field("brand").size(100));
 
         //5.进行查询
         SearchResponse search = null;
@@ -157,21 +159,36 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
             search = client.search(request, RequestOptions.DEFAULT);
             //6.解析结果
             Aggregations aggregations = search.getAggregations();
-            Terms brandAgg = aggregations.get("brandAgg");
-            List<? extends Terms.Bucket> buckets = brandAgg.getBuckets();
-            //7.将结果注入到返回对象中
-            List<String> list = new ArrayList<>();
-            for (Terms.Bucket bucket : buckets) {
-                list.add(bucket.getKeyAsString());
-                System.out.println(bucket.getKey());
-            }
-            map.put("brand", list);
+            //7.注入到map
+            List<String> cityList = parseAggs(aggregations.get("cityAgg"));
+            List<String> starNameList = parseAggs(aggregations.get("starNameAgg"));
+            List<String> brandList = parseAggs(aggregations.get("brandAgg"));
+            map.put("city", cityList);
+            map.put("starName", starNameList);
+            map.put("brand", brandList);
+
         } catch (IOException e) {
             e.printStackTrace();
         }
-        //8。返回结果
+        //8.返回结果
         return map;
     }
+
+    /**
+     * 解析聚合结果
+     */
+    private List<String> parseAggs(Terms agg)
+    {
+        List<String> list = new ArrayList<>();
+        // 聚合名称{buckets:[]}
+        List<? extends Terms.Bucket> buckets = agg.getBuckets();
+        for (Terms.Bucket bucket : buckets) {
+            list.add(bucket.getKeyAsString());
+        }
+        //return brandAgg.getBuckets().stream().map(Terms.Bucket::getKeyAsString).collect(Collectors.toList());
+        return list;
+    }
+
 
     private void addHighLight(SearchRequest searchRequest)
     {
