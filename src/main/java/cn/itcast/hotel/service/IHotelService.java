@@ -16,4 +16,11 @@ public interface IHotelService extends IService<Hotel> {
      * 品牌过滤
      */
     Map<String, List<String>> getFilter(RequestParams requestParams);
+
+    /**
+     * 搜索框 自动填充
+     * @param key
+     * @return
+     */
+    List<String> getSuggestion(String key);
 }

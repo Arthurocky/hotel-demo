@@ -30,6 +30,10 @@ import org.elasticsearch.search.fetch.subphase.highlight.HighlightField;
 import org.elasticsearch.search.sort.GeoDistanceSortBuilder;
 import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortOrder;
+import org.elasticsearch.search.suggest.Suggest;
+import org.elasticsearch.search.suggest.SuggestBuilder;
+import org.elasticsearch.search.suggest.SuggestBuilders;
+import org.elasticsearch.search.suggest.completion.CompletionSuggestion;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
@@ -171,6 +175,47 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
         }
         //8.返回结果
         return map;
+    }
+
+    /**
+     * 搜索框 自动填充
+     *
+     * @param key
+     * @return
+     */
+    @Override
+    public List<String> getSuggestion(String key)
+    {
+        List<String> list = new ArrayList<>();
+        if (StringUtils.isNotEmpty(key)) {
+            //1. 创建SearchRequest
+            SearchRequest searchRequest = new SearchRequest("hotel");
+            searchRequest.source().suggest(new SuggestBuilder().addSuggestion(
+                    "mySugg",
+                    SuggestBuilders.completionSuggestion("suggestion")
+                            .prefix(key)
+                            .skipDuplicates(true).size(10)
+            ));
+            //2. 查询
+            SearchResponse response = null;
+            try {
+                response = client.search(searchRequest, RequestOptions.DEFAULT);
+                //3. 解析
+                Suggest suggest = response.getSuggest();
+                CompletionSuggestion mySugg = suggest.getSuggestion("mySugg");
+                // 获取options
+                List<CompletionSuggestion.Entry.Option> options = mySugg.getOptions();
+                list = options.stream()
+                        //CompletionSuggestion.Entry.Option
+                        .map(CompletionSuggestion.Entry.Option::getText)
+                        // Text
+                        .map(Text::string).collect(Collectors.toList());
+            } catch (IOException e) {
+                e.printStackTrace();// 变成log打印
+            }
+        }
+        return list;
+
     }
 
     /**
