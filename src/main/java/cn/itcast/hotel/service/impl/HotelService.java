@@ -152,7 +152,6 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
                 .terms("starNameAgg").field("starName").size(100));
         request.source().aggregation(AggregationBuilders
                 .terms("brandAgg").field("brand").size(100));
-
         //5.进行查询
         SearchResponse search = null;
         try {
