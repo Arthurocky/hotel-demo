@@ -54,13 +54,12 @@ public class HotelDoc {
         this.location = hotel.getLatitude() + ", " + hotel.getLongitude();
         this.pic = hotel.getPic();
         //补充session字段内容--》通过name和business中来
-        suggestion = new ArrayList<>();
         //仅添加品牌补充
+        suggestion = new ArrayList<>();
         suggestion.add(this.brand);
-        if (StringUtils.isNotEmpty(this.brand)) {
+        if(StringUtils.isNotEmpty(this.business)){
             // 按 、/ 拆分
-            String[] split = this.business.split("/|、");
-            //将得到拆分的数据注入到suggestion中
+            String[] split = this.business.split("、|/");
             Collections.addAll(suggestion, split);
         }
     }
