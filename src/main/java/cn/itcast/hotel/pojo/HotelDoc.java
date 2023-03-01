@@ -2,6 +2,12 @@ package cn.itcast.hotel.pojo;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -21,15 +27,21 @@ public class HotelDoc {
     /**
      * 排序时的 距离值
      */
-    private Object  distance;
+    private Object distance;
 
     /**
      * 广告
-      */
+     */
     private Boolean isAD;
 
+    /**
+     * 补充session字段内容--》通过name和business中来
+     */
+    private List<String> suggestion;
 
-    public HotelDoc(Hotel hotel) {
+
+    public HotelDoc(Hotel hotel)
+    {
         this.id = hotel.getId();
         this.name = hotel.getName();
         this.address = hotel.getAddress();
@@ -41,5 +53,25 @@ public class HotelDoc {
         this.business = hotel.getBusiness();
         this.location = hotel.getLatitude() + ", " + hotel.getLongitude();
         this.pic = hotel.getPic();
+        //补充session字段内容--》通过name和business中来
+        suggestion = new ArrayList<>();
+        //仅添加品牌补充
+        suggestion.add(this.brand);
+        if (StringUtils.isNotEmpty(this.brand)) {
+            // 按 、/ 拆分
+            String[] split = this.business.split("/|、");
+            //将得到拆分的数据注入到suggestion中
+            Collections.addAll(suggestion, split);
+        }
+    }
+
+
+    /**
+     * 测试拼音
+     */
+    public static void main(String[] args)
+    {
+        String[] split = "前门、崇文门商贸区、天安门/王府井地区".split("、|/");
+        Arrays.stream(split).forEach(System.out::println);
     }
 }
